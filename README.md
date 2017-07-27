@@ -1,5 +1,3 @@
-Simple Akka Remote example in Scala
-===================================
+# RemoteExecutor
 
-This repository contains a simple example for akka remote. It shows how to create both remote and local actors in same
-project.It also shows how different configurations are read and interpreted.
+The aim of this project is to allow programs and commands execution on multiple computers at a time 
