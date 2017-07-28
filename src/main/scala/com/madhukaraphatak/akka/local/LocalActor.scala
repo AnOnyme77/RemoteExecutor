@@ -26,12 +26,33 @@ class LocalActor extends Actor{
     private val remoteActors:collection.mutable.HashMap[String, ActorSelection] =
         collection.mutable.HashMap[String, ActorSelection]()
 
+    private val downloads:collection.mutable.HashMap[String, (String, collection.mutable.ListBuffer[Byte])] =
+        collection.mutable.HashMap[String, (String, collection.mutable.ListBuffer[Byte])]()
+
     override def receive: Receive = {
+
+        case RemoteMessages.DownloadEnd(path) =>
+            Files.write(Paths.get(downloads(path)._1),downloads(path)._2.toArray)
+            downloads.remove(path)
+
+        case RemoteMessages.DownloadData(data, path)=>
+            val pair = downloads(path)
+            var actualData = pair._2
+            data.foreach{
+                b => actualData = actualData.+=(b)
+            }
+            downloads.put(path, (pair._1, actualData))
+
+        case RemoteMessages.Download(remote, from, to) =>
+                downloads.put(from, (to, collection.mutable.ListBuffer()))
+                remoteActors(remote)!RemoteMessages.DownloadStart(from)
+
         case RemoteMessages.Disconnect(name) =>
             remoteActors.remove(name)
         case RemoteMessages.Connect(name, ip, port) =>
             val actorSelection = context.actorSelection("akka.tcp://RemoteSystem@"+ip+":"+port+"/user/remote")
             remoteActors.put(name, actorSelection)
+            println("Connexion réussie")
         case RemoteMessages.Connected() =>
             remoteActors.keys.foreach{
                 s => println("Connected to "+s)
@@ -63,7 +84,9 @@ class LocalActor extends Actor{
         case msg:String => {
             println("got message from remote" + msg)
         }
-        case RemoteMessages.ExecutionResult(output) => println(output)
+        case RemoteMessages.ExecutionResult(output) =>
+            println("\r"+output)
+            print("\n\rremote> ")
     }
 }
 
@@ -73,13 +96,19 @@ object cmd {
 
     private var localActor:ActorRef = null
 
-    private val functionMap = Map[String, (String) => Any](
-        "exec" -> exec,
-        "upload" -> upload,
-        "connect" -> connect,
-        "connected" -> connected,
-        "disconnect" -> disonnect,
-        "python" -> python
+    private val functionMap:Map[String, Tuple2[(String) => Any, String]]
+            = Map[String, Tuple2[(String) => Any, String]](
+        "exec" -> Tuple2(exec, "-(exemple)-> exec cmd -(explic.)-> exec a shell command on all connected computers"),
+        "upload" -> Tuple2(upload, "-(exemple)-> upload from to -(explic.)-> upload 'from' local file to 'to' file path on all connected computers\""),
+        "connect" -> Tuple2(connect, "-(exemple)-> connect name 127.0.0.1 5150 -(explic.)-> connect computer on address 127.0.0.1 on port 5150 with name 'name'\""),
+        "connected" -> Tuple2(connected, "-(exemple)-> connected ls -(explic.)-> show all connected computers\""),
+        "disconnect" -> Tuple2(disonnect, "-(exemple)-> disconnect name -(explic.)-> disconnect computer identified by 'name'\""),
+        "python" -> Tuple2(python, "-(exemple)-> python from to -(explic.)-> upload 'from' python script to all computers on 'to' file path and execute the script with python on all connected computers\""),
+        "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper")
+    )
+
+    private val directFunctionMap = Map[String, ((String,String) => Any, String)](
+        "download" -> Tuple2(download, "-(exemple)-> #name download from to -(explic.)-> download the file 'from' from 'name' computer to local 'to' file path\"")
     )
 
     def main(args: Array[String]) {
@@ -88,12 +117,23 @@ object cmd {
         val system = ActorSystem("ClientSystem",config)
         localActor = system.actorOf(Props[LocalActor], name="local")
 
-        var ln = StdIn.readLine("remote> ")
+        var ln = StdIn.readLine("\n\rremote> ")
         while(ln != "exit") {
             Try{
                 val functionName = getFunction(ln)
-                if(functionMap.contains(functionName)) {
-                    functionMap(functionName)(getArgs(ln))
+                if(functionName startsWith("#")) {
+                    val remote = functionName.replace("#","")
+                    val function = getFunction(getArgs(ln))
+                    val args = getArgs(getArgs(ln))
+
+                    if(!directFunctionMap.contains(function)) {
+                        println("Fonction inconnue")
+                    } else {
+                        directFunctionMap(function)._1(remote,args)
+                    }
+
+                } else if(functionMap.contains(functionName)) {
+                    functionMap(functionName)._1(getArgs(ln))
                 } else {
                     exec(ln)
                 }
@@ -102,9 +142,32 @@ object cmd {
                 case _ =>
             }
 
-            ln = StdIn.readLine("remote> ")
+            ln = StdIn.readLine("\n\rremote> ")
         }
         system.shutdown()
+    }
+
+    private def help(args:String) = {
+        println("###########################################")
+        println("--------> Commandes")
+        println("###########################################")
+        functionMap.keys.foreach { k =>
+            println("Commande : "+k+" "+functionMap(k)._2)
+        }
+
+        println("\n###########################################")
+        println("--------> Commandes dirigées")
+        println("###########################################")
+        directFunctionMap.keys.foreach { k =>
+            println("Commande : "+k+" "+directFunctionMap(k)._2)
+        }
+    }
+
+    private def download(remote:String, args:String): Unit = {
+        val from = args.split(" ")(0)
+        val to = args.split(" ")(1)
+
+        localActor!RemoteMessages.Download(remote, from, to)
     }
 
     private def python(args:String):Unit = {

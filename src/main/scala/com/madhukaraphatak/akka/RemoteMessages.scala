@@ -11,5 +11,9 @@ object RemoteMessages {
     case class ExecCommands(f:List[String])
     case class UploadFile(f:Array[Byte], destination:String)
     case class UploadEnd(destination:String)
+    case class DownloadEnd(path:String)
+    case class DownloadData(data:Array[Byte], path:String)
+    case class DownloadStart(path:String)
+    case class Download(remote:String, from:String, to:String)
     case class ExecutionResult(result:Any)
 }

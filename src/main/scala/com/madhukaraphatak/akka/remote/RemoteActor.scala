@@ -29,6 +29,23 @@ class RemoteActor extends Actor {
     }
 
     override def receive: Receive = {
+        case RemoteMessages.DownloadStart(path) =>
+            val byteArray = Files.readAllBytes(Paths.get(path))
+            var remainingSize = byteArray.length
+            var sended = 0
+            while(remainingSize>0) {
+                if(remainingSize > RemoteActor.MAX_MSG_SIZE) {
+                    sender!RemoteMessages.DownloadData(byteArray.slice(sended,sended + RemoteActor.MAX_MSG_SIZE),path)
+                    remainingSize-=RemoteActor.MAX_MSG_SIZE
+                    sended+=RemoteActor.MAX_MSG_SIZE
+                } else {
+                    sender!RemoteMessages.DownloadData(byteArray.slice(sended,sended + remainingSize),path)
+                    sender!RemoteMessages.DownloadEnd(path)
+                    remainingSize = 0
+                    sended = remainingSize
+                }
+            }
+
         case msg: String => {
             println("remote received " + msg + " from " + sender)
             sender ! "hi"
@@ -49,6 +66,9 @@ class RemoteActor extends Actor {
 }
 
 object RemoteActor{
+
+    val MAX_MSG_SIZE = 125000
+
     def main(args: Array[String]) {
         //get the configuration file from classpath
         val configFile = getClass.getClassLoader.getResource("remote_application.conf").getFile
