@@ -28,6 +28,7 @@ class RemoteActor extends Actor {
     private val runningProcessWaiting = collection.mutable.HashMap[String, collection.mutable.ListBuffer[String]]()
     private val runningProcessReady = collection.mutable.HashMap[String, Boolean]()
     private val runningProcessClient = collection.mutable.HashMap[String, ActorRef]()
+    private val runningProcessFile = collection.mutable.HashMap[String, Tuple2[String, String]]()
 
     def sendResult(name:String): (String) => Unit = {
         {
@@ -51,7 +52,7 @@ class RemoteActor extends Actor {
         values.value.foreach {
             jsValue =>
                 val value = jsValue.as[String]
-                runningProcessClient(name) ! RemoteMessages.ExecutionResult(value)
+                runningProcessClient(name) ! RemoteMessages.RemoteProcessResult(name, jsValue)
         }
 
     }
@@ -140,6 +141,7 @@ class RemoteActor extends Actor {
             val scriptName = fileName+"_remote.py"
             writeToFile(scriptName,completeScript)
             runningProcessClient.put(name, sender)
+            runningProcessFile.put(name, (scriptName, fileName))
             execConsumer(name, scriptName)
 
         case RemoteMessages.AddInputToProcess(name, line) =>
@@ -157,6 +159,11 @@ class RemoteActor extends Actor {
             runningProcessClient.remove(name)
             runningProcessReady.remove(name)
             runningProcessWaiting.remove(name)
+            var path = runningProcessFile(name)._1
+            new File(path).delete()
+            path = runningProcessFile(name)._2
+            new File(path).delete()
+            runningProcessFile.remove(name)
 
         case _ => println("Received unknown msg ")
     }

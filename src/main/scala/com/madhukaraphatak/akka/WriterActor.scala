@@ -11,7 +11,7 @@ class WriterActor extends Actor {
             println("\r"+message)
             print("\n\rremote> ")
         case RemoteMessages.RemoteProcessResult(name, message) =>
-            println("\r"+message)
+            println("\rbalance output from ["+name+"] : "+message)
             print("\n\rremote> ")
     }
 }

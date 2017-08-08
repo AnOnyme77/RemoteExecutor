@@ -36,6 +36,7 @@ class LocalActor extends Actor{
     private val writer = context.actorOf(Props[WriterActor])
 
     private val toReveiveBalance = collection.mutable.HashMap[String, Integer]()
+    private val localFileBalance = collection.mutable.HashMap[String, String]()
 
     def readFile(path:String) = {
         val source = scala.io.Source.fromFile(path)
@@ -57,7 +58,7 @@ class LocalActor extends Actor{
 
     def execProducer(scriptPath:String, execName:String) = {
         Future{
-            println("Executes "+scriptPath)
+            localFileBalance.put(execName, scriptPath)
             val process = Process ("python "+scriptPath)
             val io = new ProcessIO (
                 writer,
@@ -84,10 +85,13 @@ class LocalActor extends Actor{
         case RemoteMessages.RemoteProcessResult(name, output) =>
             writer!RemoteMessages.RemoteProcessResult(name, output)
             toReveiveBalance.put(name, toReveiveBalance(name) - 1)
-            if(toReveiveBalance(name) == 0)
+            if(toReveiveBalance(name) == 0) {
+                writer!RemoteMessages.ExecutionResult("Execution of balance ["+name+"] terminated")
                 remoteActors.values.foreach {
-                    r => r!RemoteMessages.TerminateProcess(name)
+                    r => r ! RemoteMessages.TerminateProcess(name)
                 }
+                new File(localFileBalance(name)).delete()
+            }
 
         case RemoteMessages.LoadBalance(name, prodSc, prodFnct, consSc, consFnct) =>
             remoteActors.keys.foreach {
@@ -103,9 +107,6 @@ class LocalActor extends Actor{
             writeToFile(fileName,content)
 
             execProducer(fileName, name)
-
-        case RemoteMessages.RemoteProcessResult(name, output) =>
-
 
         case RemoteMessages.DownloadEnd(path) =>
             Files.write(Paths.get(downloads(path)._1),downloads(path)._2.toArray)
@@ -234,7 +235,7 @@ object cmd {
         val consumerScript = consumerPart(1)
         val consumerFunc = consumerPart(2)
 
-        upload(consumerScript+" "+name)
+        upload(consumerScript+" "+consumerScript.split("/").last)
 
         localActor!LoadBalance(name, producerScript, producerFunc,
             consumerScript, consumerFunc)
