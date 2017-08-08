@@ -1,17 +1,20 @@
 package com.madhukaraphatak.akka.local
 
-import java.io.File
+import java.io.{File, InputStream, PrintWriter}
 import java.nio.file.{Files, Paths}
 
 import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.madhukaraphatak.akka.RemoteMessages
+import com.madhukaraphatak.akka.{RemoteMessages, WriterActor}
+import com.madhukaraphatak.akka.RemoteMessages.LoadBalance
+import com.madhukaraphatak.akka.local.cmd.getClass
 import com.typesafe.config.ConfigFactory
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
-import scala.io.StdIn
+import scala.io.{Codec, Source, StdIn}
+import scala.sys.process.{Process, ProcessIO}
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -22,6 +25,7 @@ object LocalActor {
 }
 
 class LocalActor extends Actor{
+    import context.dispatcher
 
     private val remoteActors:collection.mutable.HashMap[String, ActorSelection] =
         collection.mutable.HashMap[String, ActorSelection]()
@@ -29,7 +33,79 @@ class LocalActor extends Actor{
     private val downloads:collection.mutable.HashMap[String, (String, collection.mutable.ListBuffer[Byte])] =
         collection.mutable.HashMap[String, (String, collection.mutable.ListBuffer[Byte])]()
 
+    private val writer = context.actorOf(Props[WriterActor])
+
+    private val toReveiveBalance = collection.mutable.HashMap[String, Integer]()
+
+    def readFile(path:String) = {
+        val source = scala.io.Source.fromFile(path)
+        val lines = try source.mkString finally source.close()
+        lines
+    }
+
+    def readLocalBalanceFile() = {
+        val stream : InputStream = getClass.getResourceAsStream("/balance_local.py")
+        val lines = scala.io.Source.fromInputStream( stream ).mkString("")
+        lines
+    }
+
+    def writeToFile(path:String, content:String) = {
+        val writer = new PrintWriter(new File(path))
+        writer.write(content)
+        writer.close()
+    }
+
+    def execProducer(scriptPath:String, execName:String) = {
+        Future{
+            println("Executes "+scriptPath)
+            val process = Process ("python "+scriptPath)
+            val io = new ProcessIO (
+                writer,
+                out => {scala.io.Source.fromInputStream(out).getLines.foreach{
+                    l => remoteActors.keys.foreach {
+                        k =>
+                            writer!RemoteMessages.ExecutionResult("Send output ["+l+"] to remote ["+k+"]")
+                            remoteActors(k) ! RemoteMessages.AddInputToProcess(execName,l)
+                            if(!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName,0)
+                            toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
+                    }
+                }},
+                err => {scala.io.Source.fromInputStream(err).getLines.foreach(println)})
+            process run io
+        }
+    }
+
+    def writer(output: java.io.OutputStream) = {
+
+    }
+
     override def receive: Receive = {
+
+        case RemoteMessages.RemoteProcessResult(name, output) =>
+            writer!RemoteMessages.RemoteProcessResult(name, output)
+            toReveiveBalance.put(name, toReveiveBalance(name) - 1)
+            if(toReveiveBalance(name) == 0)
+                remoteActors.values.foreach {
+                    r => r!RemoteMessages.TerminateProcess(name)
+                }
+
+        case RemoteMessages.LoadBalance(name, prodSc, prodFnct, consSc, consFnct) =>
+            remoteActors.keys.foreach {
+                a => remoteActors(a)!RemoteMessages.SpawnProcess(name, consSc.split("/").last, consFnct)
+            }
+
+            val script = readFile(prodSc)
+
+            val lines = readLocalBalanceFile()
+
+            val content = lines.replace("# file",script).replace("print(\"main\")",prodFnct+"()")
+            val fileName = name+".py"
+            writeToFile(fileName,content)
+
+            execProducer(fileName, name)
+
+        case RemoteMessages.RemoteProcessResult(name, output) =>
+
 
         case RemoteMessages.DownloadEnd(path) =>
             Files.write(Paths.get(downloads(path)._1),downloads(path)._2.toArray)
@@ -52,10 +128,10 @@ class LocalActor extends Actor{
         case RemoteMessages.Connect(name, ip, port) =>
             val actorSelection = context.actorSelection("akka.tcp://RemoteSystem@"+ip+":"+port+"/user/remote")
             remoteActors.put(name, actorSelection)
-            println("Connexion réussie")
+            writer!RemoteMessages.ExecutionResult("Connexion réussie")
         case RemoteMessages.Connected() =>
             remoteActors.keys.foreach{
-                s => println("Connected to "+s)
+                s => writer!RemoteMessages.ExecutionResult("Connecté à "+s)
             }
         case RemoteMessages.ExecCommands(cmds) =>
             remoteActors.values.foreach {
@@ -82,11 +158,11 @@ class LocalActor extends Actor{
             }
 
         case msg:String => {
-            println("got message from remote" + msg)
+            writer!RemoteMessages.ExecutionResult(msg)
         }
         case RemoteMessages.ExecutionResult(output) =>
-            println("\r"+output)
-            print("\n\rremote> ")
+            writer!RemoteMessages.ExecutionResult(output)
+
     }
 }
 
@@ -104,7 +180,8 @@ object cmd {
         "connected" -> Tuple2(connected, "-(exemple)-> connected ls -(explic.)-> show all connected computers\""),
         "disconnect" -> Tuple2(disonnect, "-(exemple)-> disconnect name -(explic.)-> disconnect computer identified by 'name'\""),
         "python" -> Tuple2(python, "-(exemple)-> python from to -(explic.)-> upload 'from' python script to all computers on 'to' file path and execute the script with python on all connected computers\""),
-        "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper")
+        "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper"),
+        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 from producer script and give its outputs to function2 on consumer script")
     )
 
     private val directFunctionMap = Map[String, ((String,String) => Any, String)](
@@ -145,6 +222,22 @@ object cmd {
             ln = StdIn.readLine("\n\rremote> ")
         }
         system.shutdown()
+    }
+
+    private def balance(args:String) = {
+        val majorParts = args.split(" ")
+        val name = majorParts(0)
+        val producerPart = majorParts(1).split(":")
+        val producerScript = producerPart(1)
+        val producerFunc = producerPart(2)
+        val consumerPart = majorParts(2).split(":")
+        val consumerScript = consumerPart(1)
+        val consumerFunc = consumerPart(2)
+
+        upload(consumerScript+" "+name)
+
+        localActor!LoadBalance(name, producerScript, producerFunc,
+            consumerScript, consumerFunc)
     }
 
     private def help(args:String) = {
@@ -206,9 +299,6 @@ object cmd {
         val from = args.split(" ")(0)
         val to = args.split(" ")(1)
         val byteArray = Files.readAllBytes(Paths.get(from))
-        println(from)
-        println(to)
-        println(byteArray.length)
         localActor!RemoteMessages.UploadFile(byteArray,to)
     }
 
