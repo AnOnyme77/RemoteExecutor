@@ -1,5 +1,5 @@
 from threading import Thread
-from queue import Queue
+from Queue import Queue
 import json
 from BaseHTTPServer import HTTPServer
 from sys import version as python_version
@@ -41,7 +41,7 @@ class Receiver(BaseHTTPRequestHandler):
         items = []
         while(cont):
             try:
-                items.append(outputQueue.get(False))
+                items.append(str(outputQueue.get(False)))
             except:
                 cont = False
         self.send_response(200)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
         t.daemon = True
         t.start()
 
-    server_address = ('', 8080)
+    server_address = ('', 9001)
     httpd = HTTPServer(server_address, Receiver)
     httpd.serve_forever()
 

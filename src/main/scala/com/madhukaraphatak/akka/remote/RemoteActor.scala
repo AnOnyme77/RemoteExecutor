@@ -40,13 +40,13 @@ class RemoteActor extends Actor {
         if(runningProcessWaiting.contains(name) && runningProcessReady(name)) {
             runningProcessWaiting(name).foreach {
                 l =>
-                    Http("http://127.0.0.1:8080/").postForm(Seq("line" -> l)).asString
+                    Http("http://127.0.0.1:9001/").postForm(Seq("line" -> l)).asString
             }
         }
     }
 
     def getMessages(name:String) = {
-        val response = Http("http://127.0.0.1:8080/").asString.body
+        val response = Http("http://127.0.0.1:9001/").asString.body
         val jsonBody = Json.parse(response)
         val values = jsonBody.as[JsArray]
         values.value.foreach {
@@ -147,7 +147,7 @@ class RemoteActor extends Actor {
         case RemoteMessages.AddInputToProcess(name, line) =>
             if(runningProcessReady.contains(name) && runningProcessReady(name)) {
                 sendLateInputs(name)
-                Http("http://127.0.0.1:8080/").postForm(Seq("line" -> line)).asString
+                Http("http://127.0.0.1:9001/").postForm(Seq("line" -> line)).asString
             } else {
                 if(!runningProcessWaiting.contains(name)) runningProcessWaiting.put(name, collection.mutable.ListBuffer())
                 runningProcessWaiting(name).append(line)

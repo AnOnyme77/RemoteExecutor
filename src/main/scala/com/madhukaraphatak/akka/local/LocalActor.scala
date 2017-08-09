@@ -2,6 +2,7 @@ package com.madhukaraphatak.akka.local
 
 import java.io.{File, InputStream, PrintWriter}
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.TimeUnit
 
 import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
 import akka.pattern.ask
@@ -10,12 +11,14 @@ import com.madhukaraphatak.akka.{RemoteMessages, WriterActor}
 import com.madhukaraphatak.akka.RemoteMessages.LoadBalance
 import com.madhukaraphatak.akka.local.cmd.getClass
 import com.typesafe.config.ConfigFactory
+import play.api.libs.json.{JsArray, Json}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.io.{Codec, Source, StdIn}
 import scala.sys.process.{Process, ProcessIO}
 import scala.util.{Failure, Success, Try}
+import scalaj.http.Http
 
 /**
   * Local actor which listens on any free port
@@ -37,6 +40,7 @@ class LocalActor extends Actor{
 
     private val toReveiveBalance = collection.mutable.HashMap[String, Integer]()
     private val localFileBalance = collection.mutable.HashMap[String, String]()
+    private val localBalanceFinished = collection.mutable.HashMap[String, Boolean]()
 
     def readFile(path:String) = {
         val source = scala.io.Source.fromFile(path)
@@ -59,18 +63,33 @@ class LocalActor extends Actor{
     def execProducer(scriptPath:String, execName:String) = {
         Future{
             localFileBalance.put(execName, scriptPath)
+            localBalanceFinished.put(execName, false)
             val process = Process ("python "+scriptPath)
             val io = new ProcessIO (
                 writer,
-                out => {scala.io.Source.fromInputStream(out).getLines.foreach{
-                    l => remoteActors.keys.foreach {
-                        k =>
-                            writer!RemoteMessages.ExecutionResult("Send output ["+l+"] to remote ["+k+"]")
-                            remoteActors(k) ! RemoteMessages.AddInputToProcess(execName,l)
-                            if(!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName,0)
-                            toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
-                    }
-                }},
+                out => {
+                    context.system.scheduler.schedule(Duration(7, TimeUnit.SECONDS), Duration(1, TimeUnit.SECONDS)) {
+                        val response = Http("http://127.0.0.1:9000/").asString.body
+                        val jsonBody = Json.parse(response)
+                        val values = jsonBody.as[JsArray]
+                        values.value.foreach {
+                            jsValue =>
+                                val value = jsValue.as[String]
+                                if(!value.equals("#!#/#%END%#\\#!#")) {
+                                    remoteActors.keys.foreach {
+                                        remote =>
+                                            writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remote + "]")
+                                            remoteActors(remote) ! RemoteMessages.AddInputToProcess(execName, value)
+                                            if (!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName, 0)
+                                            toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
+                                    }
+                                } else {
+                                    writer ! RemoteMessages.ExecutionResult("Local balance ["+execName+"] finished")
+                                    localBalanceFinished.put(execName, true)
+                                }
+
+                        }
+                    }},
                 err => {scala.io.Source.fromInputStream(err).getLines.foreach(println)})
             process run io
         }
@@ -85,7 +104,7 @@ class LocalActor extends Actor{
         case RemoteMessages.RemoteProcessResult(name, output) =>
             writer!RemoteMessages.RemoteProcessResult(name, output)
             toReveiveBalance.put(name, toReveiveBalance(name) - 1)
-            if(toReveiveBalance(name) == 0) {
+            if(toReveiveBalance(name) == 0 && localBalanceFinished(name)) {
                 writer!RemoteMessages.ExecutionResult("Execution of balance ["+name+"] terminated")
                 remoteActors.values.foreach {
                     r => r ! RemoteMessages.TerminateProcess(name)
@@ -102,7 +121,7 @@ class LocalActor extends Actor{
 
             val lines = readLocalBalanceFile()
 
-            val content = lines.replace("# file",script).replace("print(\"main\")",prodFnct+"()")
+            val content = lines.replace("# file",script).replace("print(\"main\")",prodFnct+"(self.queue)")
             val fileName = name+".py"
             writeToFile(fileName,content)
 
