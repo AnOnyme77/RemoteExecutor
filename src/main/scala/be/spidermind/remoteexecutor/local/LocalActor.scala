@@ -206,7 +206,7 @@ object cmd {
         "disconnect" -> Tuple2(disonnect, "-(exemple)-> disconnect name -(explic.)-> disconnect computer identified by 'name'\""),
         "python" -> Tuple2(python, "-(exemple)-> python from to -(explic.)-> upload 'from' python script to all computers on 'to' file path and execute the script with python on all connected computers\""),
         "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper"),
-        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 from producer script and give its outputs to function2 on consumer script")
+        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script")
     )
 
     private val directFunctionMap = Map[String, ((String,String) => Any, String)](
