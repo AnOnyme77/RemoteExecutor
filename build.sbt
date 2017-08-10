@@ -1,5 +1,5 @@
 
-name := "akka-remote-simple-scala"
+name := "remote-executor"
 
 version := "1.0"
 

@@ -1,4 +1,4 @@
-package com.madhukaraphatak.akka.local
+package be.spidermind.remoteexecutor.local
 
 import java.io.{File, InputStream, PrintWriter}
 import java.nio.file.{Files, Paths}
@@ -8,9 +8,9 @@ import java.util.concurrent.TimeUnit
 import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.madhukaraphatak.akka.{RemoteMessages, WriterActor}
-import com.madhukaraphatak.akka.RemoteMessages.LoadBalance
-import com.madhukaraphatak.akka.local.cmd.getClass
+import be.spidermind.remoteexecutor.{RemoteMessages, WriterActor}
+import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
+import cmd.getClass
 import com.typesafe.config.ConfigFactory
 import play.api.libs.json.{JsArray, Json}
 

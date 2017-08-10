@@ -1,4 +1,4 @@
-package com.madhukaraphatak.akka
+package be.spidermind.remoteexecutor
 
 /**
   * Created by anonyme77 on 25/07/2017.

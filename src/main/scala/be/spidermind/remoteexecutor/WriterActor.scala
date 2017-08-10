@@ -1,4 +1,4 @@
-package com.madhukaraphatak.akka
+package be.spidermind.remoteexecutor
 
 import akka.actor.Actor
 

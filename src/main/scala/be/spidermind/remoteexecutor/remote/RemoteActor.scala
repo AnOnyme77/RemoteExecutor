@@ -1,4 +1,4 @@
-package com.madhukaraphatak.akka.remote
+package be.spidermind.remoteexecutor.remote
 
 import java.io.{File, InputStream, OutputStream, PrintWriter}
 import java.nio.charset.Charset
@@ -6,7 +6,7 @@ import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import com.madhukaraphatak.akka.RemoteMessages
+import be.spidermind.remoteexecutor.RemoteMessages
 import com.typesafe.config.ConfigFactory
 import play.api.libs.json.{JsArray, Json}
 
