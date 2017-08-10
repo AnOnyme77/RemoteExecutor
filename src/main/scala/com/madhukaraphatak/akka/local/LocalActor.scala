@@ -70,7 +70,10 @@ class LocalActor extends Actor{
                 writer,
                 out => {
                     context.system.scheduler.schedule(Duration(7, TimeUnit.SECONDS), Duration(1, TimeUnit.SECONDS)) {
-                        val response = Http("http://127.0.0.1:9000/").asString.body
+                        val response = Http("http://127.0.0.1:9000/")
+                            .timeout(connTimeoutMs = 5000, readTimeoutMs = 5000)
+                            .asString
+                            .body
                         val jsonBody = Json.parse(response)
                         val values = jsonBody.as[JsArray]
                         values.value.foreach {
