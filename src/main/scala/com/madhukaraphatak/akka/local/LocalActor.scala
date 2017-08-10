@@ -2,6 +2,7 @@ package com.madhukaraphatak.akka.local
 
 import java.io.{File, InputStream, PrintWriter}
 import java.nio.file.{Files, Paths}
+import java.util.Random
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{Actor, ActorRef, ActorSelection, ActorSystem, Props}
@@ -76,13 +77,14 @@ class LocalActor extends Actor{
                             jsValue =>
                                 val value = jsValue.as[String]
                                 if(!value.equals("#!#/#%END%#\\#!#")) {
-                                    remoteActors.keys.foreach {
-                                        remote =>
-                                            writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remote + "]")
-                                            remoteActors(remote) ! RemoteMessages.AddInputToProcess(execName, value)
-                                            if (!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName, 0)
-                                            toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
-                                    }
+                                    val rand = new Random(System.currentTimeMillis())
+                                    val random_index = rand.nextInt(remoteActors.size)
+                                    val remoteName = remoteActors.keys.toArray.apply(random_index)
+
+                                    writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remoteName + "]")
+                                    remoteActors(remoteName) ! RemoteMessages.AddInputToProcess(execName, value)
+                                    if (!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName, 0)
+                                    toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
                                 } else {
                                     writer ! RemoteMessages.ExecutionResult("Local balance ["+execName+"] finished")
                                     localBalanceFinished.put(execName, true)
