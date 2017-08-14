@@ -5,6 +5,7 @@ The aim of this project is to allow programs and commands execution on multiple 
 ## Needed material and software
 * Python installed
 * A Unix based system (Linux or mac) : this constraint will be removed in a later version
+* Sbt installer (to build the tool)
 
 ## Launching
 To execute and test this code :
