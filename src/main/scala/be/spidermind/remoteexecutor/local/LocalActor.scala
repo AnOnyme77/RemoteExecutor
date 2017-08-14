@@ -206,7 +206,8 @@ object cmd {
         "disconnect" -> Tuple2(disonnect, "-(exemple)-> disconnect name -(explic.)-> disconnect computer identified by 'name'\""),
         "python" -> Tuple2(python, "-(exemple)-> python from to -(explic.)-> upload 'from' python script to all computers on 'to' file path and execute the script with python on all connected computers\""),
         "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper"),
-        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script")
+        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script"),
+        "script" -> Tuple2(script, "-(exemple)-> script /home/script.re -(explic)-> executes the script /home/script.re. This script must contain commands accepted by this command line. It works like an interpreter. Script files can containt script command :)")
     )
 
     private val directFunctionMap = Map[String, ((String,String) => Any, String)](
@@ -221,32 +222,41 @@ object cmd {
 
         var ln = StdIn.readLine("\n\rremote> ")
         while(ln != "exit") {
-            Try{
-                val functionName = getFunction(ln)
-                if(functionName startsWith("#")) {
-                    val remote = functionName.replace("#","")
-                    val function = getFunction(getArgs(ln))
-                    val args = getArgs(getArgs(ln))
-
-                    if(!directFunctionMap.contains(function)) {
-                        println("Fonction inconnue")
-                    } else {
-                        directFunctionMap(function)._1(remote,args)
-                    }
-
-                } else if(functionMap.contains(functionName)) {
-                    functionMap(functionName)._1(getArgs(ln))
-                } else {
-                    exec(ln)
-                }
-            } match {
-                case Failure(ex) => println("Une erreur est survenue : "+ex.getMessage)
-                case _ =>
-            }
-
+            execCommandLine(ln)
             ln = StdIn.readLine("\n\rremote> ")
         }
         system.shutdown()
+    }
+
+    private def script(file:String) = {
+        scala.io.Source.fromFile(file).getLines().foreach {
+            l => execCommandLine(l)
+        }
+    }
+
+    private def execCommandLine(line:String) = {
+        Try{
+            val functionName = getFunction(line)
+            if(functionName startsWith("#")) {
+                val remote = functionName.replace("#","")
+                val function = getFunction(getArgs(line))
+                val args = getArgs(getArgs(line))
+
+                if(!directFunctionMap.contains(function)) {
+                    println("Fonction inconnue")
+                } else {
+                    directFunctionMap(function)._1(remote,args)
+                }
+
+            } else if(functionMap.contains(functionName)) {
+                functionMap(functionName)._1(getArgs(line))
+            } else {
+                exec(line)
+            }
+        } match {
+            case Failure(ex) => println("Une erreur est survenue : "+ex.getMessage)
+            case _ =>
+        }
     }
 
     private def balance(args:String) = {
