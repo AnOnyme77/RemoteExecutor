@@ -10,6 +10,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import be.spidermind.remoteexecutor.{RemoteMessages, WriterActor}
 import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
+import be.spidermind.remoteexecutor.local.interpreter.Interpreter
 import cmd.getClass
 import com.typesafe.config.ConfigFactory
 import play.api.libs.json.{JsArray, Json}
@@ -197,19 +198,6 @@ object cmd {
 
     private var localActor:ActorRef = null
 
-    private val functionMap:Map[String, Tuple2[(String) => Any, String]]
-            = Map[String, Tuple2[(String) => Any, String]](
-        "exec" -> Tuple2(exec, "-(exemple)-> exec cmd -(explic.)-> exec a shell command on all connected computers"),
-        "upload" -> Tuple2(upload, "-(exemple)-> upload from to -(explic.)-> upload 'from' local file to 'to' file path on all connected computers\""),
-        "connect" -> Tuple2(connect, "-(exemple)-> connect name 127.0.0.1 5150 -(explic.)-> connect computer on address 127.0.0.1 on port 5150 with name 'name'\""),
-        "connected" -> Tuple2(connected, "-(exemple)-> connected ls -(explic.)-> show all connected computers\""),
-        "disconnect" -> Tuple2(disonnect, "-(exemple)-> disconnect name -(explic.)-> disconnect computer identified by 'name'\""),
-        "python" -> Tuple2(python, "-(exemple)-> python from to -(explic.)-> upload 'from' python script to all computers on 'to' file path and execute the script with python on all connected computers\""),
-        "help" -> Tuple2(help, "-(exemple)-> help ls -(explic)-> print this helper"),
-        "balance" -> Tuple2(balance, "-(exemple)-> balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 -(explic.)-> create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script"),
-        "script" -> Tuple2(script, "-(exemple)-> script /home/script.re -(explic)-> executes the script /home/script.re. This script must contain commands accepted by this command line. It works like an interpreter. Script files can containt script command :)")
-    )
-
     private val directFunctionMap = Map[String, ((String,String) => Any, String)](
         "download" -> Tuple2(download, "-(exemple)-> #name download from to -(explic.)-> download the file 'from' from 'name' computer to local 'to' file path\"")
     )
@@ -228,13 +216,8 @@ object cmd {
         system.shutdown()
     }
 
-    private def script(file:String) = {
-        scala.io.Source.fromFile(file).getLines().foreach {
-            l => execCommandLine(l)
-        }
-    }
-
     private def execCommandLine(line:String) = {
+        println(Interpreter.knownCommands)
         Try{
             val functionName = getFunction(line)
             if(functionName startsWith("#")) {
@@ -248,46 +231,14 @@ object cmd {
                     directFunctionMap(function)._1(remote,args)
                 }
 
-            } else if(functionMap.contains(functionName)) {
-                functionMap(functionName)._1(getArgs(line))
+            } else if(Interpreter.knownCommands.contains(functionName)) {
+                Interpreter.executeCommand(functionName,getArgs(line))
             } else {
-                exec(line)
+                Interpreter.executeCommand("exec",getArgs(line))
             }
         } match {
             case Failure(ex) => println("Une erreur est survenue : "+ex.getMessage)
             case _ =>
-        }
-    }
-
-    private def balance(args:String) = {
-        val majorParts = args.split(" ")
-        val name = majorParts(0)
-        val producerPart = majorParts(1).split(":")
-        val producerScript = producerPart(1)
-        val producerFunc = producerPart(2)
-        val consumerPart = majorParts(2).split(":")
-        val consumerScript = consumerPart(1)
-        val consumerFunc = consumerPart(2)
-
-        upload(consumerScript+" "+consumerScript.split("/").last)
-
-        localActor!LoadBalance(name, producerScript, producerFunc,
-            consumerScript, consumerFunc)
-    }
-
-    private def help(args:String) = {
-        println("###########################################")
-        println("--------> Commandes")
-        println("###########################################")
-        functionMap.keys.foreach { k =>
-            println("Commande : "+k+" "+functionMap(k)._2)
-        }
-
-        println("\n###########################################")
-        println("--------> Commandes dirigées")
-        println("###########################################")
-        directFunctionMap.keys.foreach { k =>
-            println("Commande : "+k+" "+directFunctionMap(k)._2)
         }
     }
 
@@ -298,50 +249,11 @@ object cmd {
         localActor!RemoteMessages.Download(remote, from, to)
     }
 
-    private def python(args:String):Unit = {
-        val to = args.split(" ")(1)
-        upload(args)
-        exec("python "+to)
-        exec("rm "+to)
-    }
-
-    private def disonnect(args:String): Unit = {
-        args split(" ") foreach {
-            name => localActor ! RemoteMessages.Disconnect(name)
-        }
-    }
-
-    private def connected(args:String) = {
-        localActor!RemoteMessages.Connected()
-    }
-
-    private def connect(argsString:String) = {
-        val args = argsString split(" ")
-        val name = args(0)
-        val ip = args(1)
-        val port = args(2)
-
-        localActor!RemoteMessages.Connect(name, ip, port)
-    }
-
-    private def exec(cmd:String) = {
-        implicit val timeout:Timeout = 10
-        val fResult = localActor?RemoteMessages.ExecCommand(cmd)
-        Await.ready(fResult,Duration.Inf)
-    }
-
-    private def upload(args:String) = {
-        val from = args.split(" ")(0)
-        val to = args.split(" ")(1)
-        val byteArray = Files.readAllBytes(Paths.get(from))
-        localActor!RemoteMessages.UploadFile(byteArray,to)
-    }
-
     private def getFunction(ln:String) = {
         ln.split(" ")(0)
     }
 
-    private def getArgs(ln:String) = {
+    private def getArgs(ln:String):String = {
         val words = ln split(" ")
         words.slice(1, words.length).mkString(" ")
     }
