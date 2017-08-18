@@ -18,17 +18,17 @@ class HelpCommand extends CommandLineHandler {
         println("###########################################")
         println("--------> Commandes")
         println("###########################################")
-        Interpreter.commandLineClassesInfo().foreach {
-            classe =>
-                classe.annotations
-                .filter(_.descriptor.endsWith("CommandLineHelp;"))
-                    .foreach {
-                        a =>
-                            println("\n\n---> "+a.params("cmd").asInstanceOf[String])
-                            println("--------> Explication : "+a.params("explanation").asInstanceOf[String])
-                            println("--------> Exemple : "+a.params("example").asInstanceOf[String])
-                    }
-        }
+//        Interpreter.commandLineClassesInfo().foreach {
+//            classe =>
+//                classe.annotations
+//                .filter(_.descriptor.endsWith("CommandLineHelp;"))
+//                    .foreach {
+//                        a =>
+//                            println("\n\n---> "+a.params("cmd").asInstanceOf[String])
+//                            println("--------> Explication : "+a.params("explanation").asInstanceOf[String])
+//                            println("--------> Exemple : "+a.params("example").asInstanceOf[String])
+//                    }
+//        }
 
     }
 

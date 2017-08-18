@@ -10,8 +10,9 @@ import akka.pattern.ask
 import akka.util.Timeout
 import be.spidermind.remoteexecutor.{RemoteMessages, WriterActor}
 import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
+import be.spidermind.remoteexecutor.local.commands._
+import be.spidermind.remoteexecutor.local.commands.types.CommandLineHandler
 import be.spidermind.remoteexecutor.local.interpreter.Interpreter
-import cmd.getClass
 import com.typesafe.config.ConfigFactory
 import play.api.libs.json.{JsArray, Json}
 
@@ -190,72 +191,4 @@ class LocalActor extends Actor{
             writer!RemoteMessages.ExecutionResult(output)
 
     }
-}
-
-
-
-object cmd {
-
-    private var localActor:ActorRef = null
-
-    private val directFunctionMap = Map[String, ((String,String) => Any, String)](
-        "download" -> Tuple2(download, "-(exemple)-> #name download from to -(explic.)-> download the file 'from' from 'name' computer to local 'to' file path\"")
-    )
-
-    def main(args: Array[String]) {
-        val configFile = getClass.getClassLoader.getResource("local_application.conf").getFile
-        val config = ConfigFactory.parseFile(new File(configFile))
-        val system = ActorSystem("ClientSystem",config)
-        localActor = system.actorOf(Props[LocalActor], name="local")
-
-        var ln = StdIn.readLine("\n\rremote> ")
-        while(ln != "exit") {
-            execCommandLine(ln)
-            ln = StdIn.readLine("\n\rremote> ")
-        }
-        system.shutdown()
-    }
-
-    private def execCommandLine(line:String) = {
-        println(Interpreter.knownCommands)
-        Try{
-            val functionName = getFunction(line)
-            if(functionName startsWith("#")) {
-                val remote = functionName.replace("#","")
-                val function = getFunction(getArgs(line))
-                val args = getArgs(getArgs(line))
-
-                if(!directFunctionMap.contains(function)) {
-                    println("Fonction inconnue")
-                } else {
-                    directFunctionMap(function)._1(remote,args)
-                }
-
-            } else if(Interpreter.knownCommands.contains(functionName)) {
-                Interpreter.executeCommand(functionName,getArgs(line))
-            } else {
-                Interpreter.executeCommand("exec",getArgs(line))
-            }
-        } match {
-            case Failure(ex) => println("Une erreur est survenue : "+ex.getMessage)
-            case _ =>
-        }
-    }
-
-    private def download(remote:String, args:String): Unit = {
-        val from = args.split(" ")(0)
-        val to = args.split(" ")(1)
-
-        localActor!RemoteMessages.Download(remote, from, to)
-    }
-
-    private def getFunction(ln:String) = {
-        ln.split(" ")(0)
-    }
-
-    private def getArgs(ln:String):String = {
-        val words = ln split(" ")
-        words.slice(1, words.length).mkString(" ")
-    }
-
 }

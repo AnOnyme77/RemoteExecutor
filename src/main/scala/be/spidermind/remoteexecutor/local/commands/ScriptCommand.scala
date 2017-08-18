@@ -18,7 +18,7 @@ class ScriptCommand extends CommandLineHandler {
 
     override def execCmd(file: String): Unit = {
         scala.io.Source.fromFile(file).getLines().foreach {
-            l => Interpreter.cmdLineObjectsMap()(l.split(" ").head).execute(l)
+            l => Interpreter.cmdLineMap()(l.split(" ").head).execute(l)
         }
     }
 }
