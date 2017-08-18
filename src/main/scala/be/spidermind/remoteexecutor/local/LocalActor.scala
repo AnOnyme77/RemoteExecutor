@@ -30,7 +30,7 @@ object LocalActor {
     val MAX_MSG_SIZE = 125000
 }
 
-class LocalActor extends Actor{
+class LocalActor extends Actor {
     import context.dispatcher
 
     private val remoteActors:collection.mutable.HashMap[String, ActorSelection] =
