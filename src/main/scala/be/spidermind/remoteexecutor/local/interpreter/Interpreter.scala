@@ -30,7 +30,7 @@ object Interpreter extends Interpreter {
             } else if(knownCommands.contains(functionName)) {
                 executeCommand(functionName,getArgs(line))
             } else {
-                executeCommand("exec",getArgs(line))
+                executeCommand("exec",line)
             }
         } match {
             case Failure(ex) => println("Une erreur est survenue : "+ex.getMessage)

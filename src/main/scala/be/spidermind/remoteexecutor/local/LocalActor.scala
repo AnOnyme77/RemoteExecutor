@@ -41,7 +41,7 @@ class LocalActor extends Actor{
 
     private val writer = context.actorOf(Props[WriterActor])
 
-    private val toReveiveBalance = collection.mutable.HashMap[String, Integer]()
+    private val toReceiveBalance = collection.mutable.HashMap[String, Integer]()
     private val localFileBalance = collection.mutable.HashMap[String, String]()
     private val localBalanceFinished = collection.mutable.HashMap[String, Boolean]()
 
@@ -88,8 +88,8 @@ class LocalActor extends Actor{
 
                                     writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remoteName + "]")
                                     remoteActors(remoteName) ! RemoteMessages.AddInputToProcess(execName, value)
-                                    if (!toReveiveBalance.contains(execName)) toReveiveBalance.put(execName, 0)
-                                    toReveiveBalance.put(execName, toReveiveBalance(execName) + 1)
+                                    if (!toReceiveBalance.contains(execName)) toReceiveBalance.put(execName, 0)
+                                    toReceiveBalance.put(execName, toReceiveBalance(execName) + 1)
                                 } else {
                                     writer ! RemoteMessages.ExecutionResult("Local balance ["+execName+"] finished")
                                     localBalanceFinished.put(execName, true)
@@ -110,8 +110,8 @@ class LocalActor extends Actor{
 
         case RemoteMessages.RemoteProcessResult(name, output) =>
             writer!RemoteMessages.RemoteProcessResult(name, output)
-            toReveiveBalance.put(name, toReveiveBalance(name) - 1)
-            if(toReveiveBalance(name) == 0 && localBalanceFinished(name)) {
+            toReceiveBalance.put(name, toReceiveBalance(name) - 1)
+            if(toReceiveBalance(name) == 0 && localBalanceFinished(name)) {
                 writer!RemoteMessages.ExecutionResult("Execution of balance ["+name+"] terminated")
                 remoteActors.values.foreach {
                     r => r ! RemoteMessages.TerminateProcess(name)

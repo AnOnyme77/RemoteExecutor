@@ -1,16 +1,11 @@
 package be.spidermind.remoteexecutor.local.commands
 
 import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
-import be.spidermind.remoteexecutor.annotations.{CommandLine, CommandLineHelp}
-import be.spidermind.remoteexecutor.local.commands.types.CommandLineHandler
+import be.spidermind.remoteexecutor.local.commands.types.{CommandHelper, CommandLineHandler}
 
 /**
   * Created by anonyme77 on 16/08/2017.
   */
-@CommandLine
-@CommandLineHelp(cmd = "balance",
-    example="balance name producer:/path/to/script:function1 consumer:/path/to/script:function2",
-    explanation = "create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script")
 class BalanceCommand extends CommandLineHandler {
     override def cmdKey(): String = "balance"
 
@@ -24,9 +19,17 @@ class BalanceCommand extends CommandLineHandler {
         val consumerScript = consumerPart(1)
         val consumerFunc = consumerPart(2)
 
-        new UploadCommand().execute(consumerScript+" "+consumerScript.split("/").last)
-
-        localActor!LoadBalance(name, producerScript, producerFunc,
-            consumerScript, consumerFunc)
+        val cmd = new UploadCommand()
+        cmd.setRemotes(localActor)
+        cmd.chain(consumerScript+" "+consumerScript.split("/").last).map {
+            _ => localActor!LoadBalance(name, producerScript, producerFunc,
+                consumerScript, consumerFunc)
+        }
     }
+
+    override def help(): CommandHelper =
+        new CommandHelper("balance",
+            "create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script",
+            "balance name producer:/path/to/script:function1 consumer:/path/to/script:function2"
+        )
 }

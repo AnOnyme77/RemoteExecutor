@@ -48,7 +48,7 @@ class RemoteActor extends Actor {
     }
 
     def getMessages(name:String) = {
-        val response = Http("http://127.0.0.1:9001/").timeout(connTimeoutMs = 5000, readTimeoutMs = 5000)
+        val response = Http("http://127.0.0.1:9001/").timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
             .asString
             .body
         val jsonBody = Json.parse(response)
@@ -152,7 +152,7 @@ class RemoteActor extends Actor {
             if(runningProcessReady.contains(name) && runningProcessReady(name)) {
                 sendLateInputs(name)
                 Http("http://127.0.0.1:9001/")
-                    .timeout(connTimeoutMs = 5000, readTimeoutMs = 5000)
+                    .timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
                     .postForm(Seq("line" -> line))
                     .asString
             } else {

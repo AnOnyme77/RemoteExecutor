@@ -1,7 +1,7 @@
 package be.spidermind.remoteexecutor.local.commands
 
 import be.spidermind.remoteexecutor.RemoteMessages
-import be.spidermind.remoteexecutor.local.commands.types.DirectedCommandLineHandler
+import be.spidermind.remoteexecutor.local.commands.types.{CommandHelper, DirectedCommandLineHandler}
 
 /**
   * Created by anonyme77 on 18/08/2017.
@@ -15,4 +15,10 @@ class DownloadCommand extends DirectedCommandLineHandler {
 
         localActor!RemoteMessages.Download(remote, from, to)
     }
+
+    override def help(): CommandHelper =
+        new CommandHelper("download",
+            "do some nasty things",
+            "bla bla"
+        )
 }
