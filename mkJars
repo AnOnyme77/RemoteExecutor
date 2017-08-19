@@ -1,0 +1,13 @@
+#!/bin/bash
+
+sbt one-jar
+mv target/scala-2.11/remote-executor_2.11-1.0-one-jar.jar target/scala-2.11/RemoteExecutorCommandLine.jar
+
+sed "s/be.spidermind.remoteexecutor.local.CommandLine/be.spidermind.remoteexecutor.remote.RemoteActor/g" build.sbt > build2.sbt
+mv build2.sbt build.sbt 
+
+sbt one-jar
+mv target/scala-2.11/remote-executor_2.11-1.0-one-jar.jar target/scala-2.11/RemoteExecutorRemoteActor.jar
+
+sed "s/be.spidermind.remoteexecutor.remote.RemoteActor/be.spidermind.remoteexecutor.local.CommandLine/g" build.sbt > build2.sbt
+mv build2.sbt build.sbt 
