@@ -10,7 +10,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import be.spidermind.remoteexecutor.{RemoteMessages, WriterActor}
 import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
-import be.spidermind.remoteexecutor.common.FreePortFinder
+import be.spidermind.remoteexecutor.common.{FreePortFinder, Parameters}
 import be.spidermind.remoteexecutor.local.commands._
 import be.spidermind.remoteexecutor.local.commands.types.CommandLineHandler
 import be.spidermind.remoteexecutor.local.interpreter.Interpreter
@@ -45,6 +45,7 @@ class LocalActor extends Actor {
     private val toReceiveBalance = collection.mutable.HashMap[String, Integer]()
     private val localFileBalance = collection.mutable.HashMap[String, String]()
     private val localBalanceFinished = collection.mutable.HashMap[String, Boolean]()
+    private val balanceCondition = collection.mutable.HashMap[String, String]()
 
     def readFile(path:String) = {
         val source = scala.io.Source.fromFile(path)
@@ -87,12 +88,14 @@ class LocalActor extends Actor {
                                     val random_index = rand.nextInt(remoteActors.size)
                                     val remoteName = remoteActors.keys.toArray.apply(random_index)
 
-                                    writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remoteName + "]")
+                                    if(Parameters.debug)
+                                        writer ! RemoteMessages.ExecutionResult("Send output [" + value + "] to remote [" + remoteName + "]")
                                     remoteActors(remoteName) ! RemoteMessages.AddInputToProcess(execName, value)
                                     if (!toReceiveBalance.contains(execName)) toReceiveBalance.put(execName, 0)
                                     toReceiveBalance.put(execName, toReceiveBalance(execName) + 1)
                                 } else {
-                                    writer ! RemoteMessages.ExecutionResult("Local balance ["+execName+"] finished")
+                                    if(Parameters.debug)
+                                        writer ! RemoteMessages.ExecutionResult("Local balance ["+execName+"] finished")
                                     localBalanceFinished.put(execName, true)
                                 }
 
@@ -110,17 +113,20 @@ class LocalActor extends Actor {
     override def receive: Receive = {
 
         case RemoteMessages.RemoteProcessResult(name, output) =>
-            writer!RemoteMessages.RemoteProcessResult(name, output)
             toReceiveBalance.put(name, toReceiveBalance(name) - 1)
+            if(balanceCondition(name)=="" || output.toString.contains(balanceCondition(name))) {
+                writer!RemoteMessages.RemoteProcessResult(name, output)
+            }
             if(toReceiveBalance(name) == 0 && localBalanceFinished(name)) {
-                writer!RemoteMessages.ExecutionResult("Execution of balance ["+name+"] terminated")
+                if(Parameters.debug)
+                    writer!RemoteMessages.ExecutionResult("Execution of balance ["+name+"] terminated")
                 remoteActors.values.foreach {
                     r => r ! RemoteMessages.TerminateProcess(name)
                 }
                 new File(localFileBalance(name)).delete()
             }
 
-        case RemoteMessages.LoadBalance(name, prodSc, prodFnct, consSc, consFnct) =>
+        case RemoteMessages.LoadBalance(name, prodSc, prodFnct, consSc, consFnct, condition) =>
             remoteActors.keys.foreach {
                 a => remoteActors(a)!RemoteMessages.SpawnProcess(name, consSc.split("/").last, consFnct)
             }
@@ -136,6 +142,8 @@ class LocalActor extends Actor {
                 .replace("myAwesomeDynamicPort",localPort.toString)
             val fileName = name+".py"
             writeToFile(fileName,content)
+
+            balanceCondition.put(name, condition)
 
             execProducer(fileName, name, localPort)
 

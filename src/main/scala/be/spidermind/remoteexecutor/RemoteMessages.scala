@@ -5,7 +5,8 @@ package be.spidermind.remoteexecutor
   */
 object RemoteMessages {
     case class LoadBalance(name:String, producerScript:String, producerFunction: String,
-                           consumerScript:String, consumerFunction:String)
+                           consumerScript:String, consumerFunction:String,
+                           condition:String)
     case class RemoteProcessResult(name:String, result:Any)
     case class TerminateProcess(name:String)
     case class AddInputToProcess(name:String, line:String)

@@ -18,12 +18,13 @@ class BalanceCommand extends CommandLineHandler {
         val consumerPart = majorParts(2).split(":")
         val consumerScript = consumerPart(1)
         val consumerFunc = consumerPart(2)
+        val condition = if(majorParts.length == 4) majorParts(3) else ""
 
         val cmd = new UploadCommand()
         cmd.setRemotes(localActor)
         cmd.chain(consumerScript+" "+consumerScript.split("/").last).map {
             _ => localActor!LoadBalance(name, producerScript, producerFunc,
-                consumerScript, consumerFunc)
+                consumerScript, consumerFunc, condition)
         }
     }
 
