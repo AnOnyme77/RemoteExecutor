@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import be.spidermind.remoteexecutor.RemoteMessages
+import be.spidermind.remoteexecutor.common.FreePortFinder
 import com.typesafe.config.ConfigFactory
 import play.api.libs.json.{JsArray, Json}
 
@@ -29,6 +30,7 @@ class RemoteActor extends Actor {
     private val runningProcessReady = collection.mutable.HashMap[String, Boolean]()
     private val runningProcessClient = collection.mutable.HashMap[String, ActorRef]()
     private val runningProcessFile = collection.mutable.HashMap[String, Tuple2[String, String]]()
+    private val runningProcessPort = collection.mutable.HashMap[String, Int]()
 
     def sendResult(name:String): (String) => Unit = {
         {
@@ -36,19 +38,19 @@ class RemoteActor extends Actor {
         }
     }
 
-    def sendLateInputs(name:String) = {
+    def sendLateInputs(name:String, port:Int) = {
         if(runningProcessWaiting.contains(name) && runningProcessReady(name)) {
             runningProcessWaiting(name).foreach {
                 l =>
-                    Http("http://127.0.0.1:9001/")
+                    Http("http://127.0.0.1:"+port+"/")
                         .timeout(connTimeoutMs = 5000, readTimeoutMs = 5000)
                         .postForm(Seq("line" -> l)).asString
             }
         }
     }
 
-    def getMessages(name:String) = {
-        val response = Http("http://127.0.0.1:9001/").timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
+    def getMessages(name:String, port:Int) = {
+        val response = Http("http://127.0.0.1:"+port+"/").timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
             .asString
             .body
         val jsonBody = Json.parse(response)
@@ -61,16 +63,16 @@ class RemoteActor extends Actor {
 
     }
 
-    def execConsumer(name:String, scriptPath:String) = {
+    def execConsumer(name:String, scriptPath:String, port:Int) = {
         val process = Process ("python "+scriptPath)
         val io = new ProcessIO (
             {stream =>
                 Thread.sleep(7000)
                 runningProcessReady.put(name,true)
                 context.system.scheduler.schedule(Duration(1, TimeUnit.SECONDS), Duration(1, TimeUnit.SECONDS)) {
-                    getMessages(name)
+                    getMessages(name, port)
                 }
-                sendLateInputs(name)},
+                sendLateInputs(name, port)},
             out => {},
             err => {scala.io.Source.fromInputStream(err).getLines.foreach(println)})
 
@@ -141,17 +143,22 @@ class RemoteActor extends Actor {
             context.become(waitUploadEnd)
         case RemoteMessages.SpawnProcess(name, fileName, function) =>
             val script = readFile(fileName)
-            val completeScript = readRemoteBalanceFile().replace("# fctCode",script).replace("# fctCall",function+"(elem)")
+            val port = FreePortFinder.getFreshPort()
+            val completeScript = readRemoteBalanceFile()
+                .replace("# fctCode",script)
+                .replace("# fctCall",function+"(elem)")
+                .replace("myAwesomeDynamicPort",port.toString)
             val scriptName = fileName+"_remote.py"
             writeToFile(scriptName,completeScript)
             runningProcessClient.put(name, sender)
             runningProcessFile.put(name, (scriptName, fileName))
-            execConsumer(name, scriptName)
+            runningProcessPort.put(name, port)
+            execConsumer(name, scriptName, port)
 
         case RemoteMessages.AddInputToProcess(name, line) =>
             if(runningProcessReady.contains(name) && runningProcessReady(name)) {
-                sendLateInputs(name)
-                Http("http://127.0.0.1:9001/")
+                sendLateInputs(name, runningProcessPort(name))
+                Http("http://127.0.0.1:"+runningProcessPort(name)+"/")
                     .timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
                     .postForm(Seq("line" -> line))
                     .asString
@@ -166,6 +173,7 @@ class RemoteActor extends Actor {
             runningProcessClient.remove(name)
             runningProcessReady.remove(name)
             runningProcessWaiting.remove(name)
+            runningProcessPort.remove(name)
             var path = runningProcessFile(name)._1
             new File(path).delete()
             path = runningProcessFile(name)._2
@@ -181,6 +189,8 @@ object RemoteActor{
     val MAX_MSG_SIZE = 125000
 
     def main(args: Array[String]) {
+        FreePortFinder.beginPortsDiscovery(reverse = true)
+
         //get the configuration file from classpath
         val configFile = getClass.getClassLoader.getResource("remote_application.conf").getFile
         //parse the config

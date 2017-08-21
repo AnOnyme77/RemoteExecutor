@@ -10,6 +10,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import be.spidermind.remoteexecutor.{RemoteMessages, WriterActor}
 import be.spidermind.remoteexecutor.RemoteMessages.LoadBalance
+import be.spidermind.remoteexecutor.common.FreePortFinder
 import be.spidermind.remoteexecutor.local.commands._
 import be.spidermind.remoteexecutor.local.commands.types.CommandLineHandler
 import be.spidermind.remoteexecutor.local.interpreter.Interpreter
@@ -63,7 +64,7 @@ class LocalActor extends Actor {
         writer.close()
     }
 
-    def execProducer(scriptPath:String, execName:String) = {
+    def execProducer(scriptPath:String, execName:String, localPort:Int) = {
         Future{
             localFileBalance.put(execName, scriptPath)
             localBalanceFinished.put(execName, false)
@@ -72,8 +73,8 @@ class LocalActor extends Actor {
                 writer,
                 out => {
                     context.system.scheduler.schedule(Duration(7, TimeUnit.SECONDS), Duration(1, TimeUnit.SECONDS)) {
-                        val response = Http("http://127.0.0.1:9000/")
-                            .timeout(connTimeoutMs = 5000, readTimeoutMs = 5000)
+                        val response = Http("http://127.0.0.1:"+localPort+"/")
+                            .timeout(connTimeoutMs = 10000, readTimeoutMs = 10000)
                             .asString
                             .body
                         val jsonBody = Json.parse(response)
@@ -128,11 +129,15 @@ class LocalActor extends Actor {
 
             val lines = readLocalBalanceFile()
 
-            val content = lines.replace("# file",script).replace("print(\"main\")",prodFnct+"(self.queue)")
+            val localPort = FreePortFinder.getFreshPort()
+            val content = lines
+                .replace("# file",script)
+                .replace("print(\"main\")",prodFnct+"(self.queue)")
+                .replace("myAwesomeDynamicPort",localPort.toString)
             val fileName = name+".py"
             writeToFile(fileName,content)
 
-            execProducer(fileName, name)
+            execProducer(fileName, name, localPort)
 
         case RemoteMessages.DownloadEnd(path) =>
             Files.write(Paths.get(downloads(path)._1),downloads(path)._2.toArray)

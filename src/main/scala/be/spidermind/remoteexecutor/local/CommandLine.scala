@@ -3,6 +3,7 @@ package be.spidermind.remoteexecutor.local
 import java.io.File
 
 import akka.actor.{ActorRef, ActorSystem, Props}
+import be.spidermind.remoteexecutor.common.FreePortFinder
 import be.spidermind.remoteexecutor.local.commands._
 import be.spidermind.remoteexecutor.local.commands.types.CommandLineHandler
 import be.spidermind.remoteexecutor.local.interpreter.Interpreter
@@ -19,6 +20,9 @@ object CommandLine {
     private var system:ActorSystem = null
 
     def initialize() = {
+
+        FreePortFinder.beginPortsDiscovery()
+
         val configFile = getClass.getClassLoader.getResource("local_application.conf").getFile
         val config = ConfigFactory.parseFile(new File(configFile))
         system = ActorSystem("ClientSystem",config)

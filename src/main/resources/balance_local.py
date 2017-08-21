@@ -18,16 +18,19 @@ outputQueue = Queue()
 
 class Receiver(BaseHTTPRequestHandler):
     def do_GET(self):
-        cont = True
-        items = []
-        while(cont):
-            try:
-                items.append(str(outputQueue.get(False)))
-            except:
-                cont = False
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(json.dumps(items))
+        try:
+            cont = True
+            items = []
+            while(cont):
+                try:
+                    items.append(str(outputQueue.get(False)))
+                except:
+                    cont = False
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(items))
+        except:
+            pass
 
     def log_message(self, format, *args):
         return
@@ -39,8 +42,12 @@ class Worker(Thread):
         self.queue = queue
 
     def run(self):
-        print("main")
-        self.queue.put("#!#/#%END%#\#!#")
+        try:
+            print("main")
+            self.queue.put("#!#/#%END%#\#!#")
+        except:
+            pass
+
 
 
 if __name__ == '__main__':
@@ -48,6 +55,6 @@ if __name__ == '__main__':
     t.daemon = True
     t.start()
 
-    server_address = ('', 9000)
+    server_address = ('', myAwesomeDynamicPort)
     httpd = HTTPServer(server_address, Receiver)
     httpd.serve_forever()
