@@ -30,7 +30,11 @@ class BalanceCommand extends CommandLineHandler {
 
     override def help(): CommandHelper =
         new CommandHelper("balance",
-            "create a system with name 'name' where we execute function1 (this function must have a single argument that is a queue where you have to put your elements) from producer script and give its outputs to function2 (this function must then have a single argument that is the element that is given to the function) on consumer script",
-            "balance name producer:/path/to/script:function1 consumer:/path/to/script:function2"
+            "create a system with name 'name' where we execute function1 (this function must have a single argument that"+
+                " is a queue where you have to put your elements) from producer script and give its outputs to function2 "+
+                "(this function must then have a single argument that is the element that is given to the function) on"+
+                " consumer script."+
+                "if 'condition' is set the output of consumers is shown iff it contains word that is in condition",
+            "balance name producer:/path/to/script:function1 consumer:/path/to/script:function2 [condition]"
         )
 }
