@@ -60,3 +60,14 @@ Commande : exec -(exemple)-> exec cmd -(explic.)-> exec a shell command on all c
 ###########################################
 Commande : download -(exemple)-> #name download from to -(explic.)-> download the file 'from' from 'name' computer to local 'to' file path"
 ```
+
+## Default remote host
+Default remote host (auto-connected at boot) can be defined in 'remote.cfg' file that resides in the project directory or next to the jar file. 
+The synthax of this file is the following : 
+```
+name1=ip1:port1
+name2=ip2:port2
+```
+
+## Default port
+Please note that the default port of this application is 5150
