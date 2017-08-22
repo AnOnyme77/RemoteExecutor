@@ -18,8 +18,23 @@ import scala.util.{Failure, Try}
 object CommandLine {
     private var localActor:ActorRef = null
     private var system:ActorSystem = null
+    private val default_remote_config = "remote.cfg"
 
-    def initialize() = {
+    def main(args: Array[String]) {
+        initialize()
+
+        connectConfiguredRemotes()
+
+        var ln = StdIn.readLine("\n\rremote> ")
+        while(ln != "exit") {
+            Interpreter.execCommandLine(ln)
+            ln = StdIn.readLine("\n\rremote> ")
+        }
+
+        system.shutdown()
+    }
+
+    private def initialize() = {
 
         FreePortFinder.beginPortsDiscovery()
 
@@ -64,22 +79,16 @@ object CommandLine {
         cmd.setRemotes(localActor)
         Interpreter.addCommand(cmd.cmdKey(),cmd)
 
+        cmd = new ReadConfigCommand()
+        cmd.setRemotes(localActor)
+        Interpreter.addCommand(cmd.cmdKey(),cmd)
+
         val directedCmd = new DownloadCommand()
         directedCmd.setRemotes(localActor)
         Interpreter.addDirectedCommand(cmd.cmdKey(), directedCmd)
     }
 
-    def main(args: Array[String]) {
-        initialize()
-
-        var ln = StdIn.readLine("\n\rremote> ")
-        while(ln != "exit") {
-            Interpreter.execCommandLine(ln)
-            ln = StdIn.readLine("\n\rremote> ")
-        }
-
-        system.shutdown()
+    private def connectConfiguredRemotes() = {
+        Interpreter.cmdLineMap()("load").execute(default_remote_config)
     }
-
-
 }
