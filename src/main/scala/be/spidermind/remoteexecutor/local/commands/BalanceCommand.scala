@@ -18,7 +18,8 @@ class BalanceCommand extends CommandLineHandler {
         val consumerPart = majorParts(2).split(":")
         val consumerScript = consumerPart(1)
         val consumerFunc = consumerPart(2)
-        val condition = if(majorParts.length == 4) majorParts(3) else ""
+        val condition = if(majorParts.length >= 4) majorParts.slice(3, majorParts.length-1).mkString(" ").replace("\"","")
+                        else ""
 
         val cmd = new UploadCommand()
         cmd.setRemotes(localActor)
